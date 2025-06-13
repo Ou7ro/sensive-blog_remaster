@@ -3,6 +3,10 @@ from django.db.models import Count
 from blog.models import Comment, Post, Tag
 
 
+def get_related_posts_count(tag):
+    return tag.posts.count()
+
+
 def serialize_post(post):
     return {
         'title': post.title,
