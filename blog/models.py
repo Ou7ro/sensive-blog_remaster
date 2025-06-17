@@ -9,6 +9,36 @@ class TagQuerySet(models.QuerySet):
         return self.annotate(popular_tags=Count('posts')).order_by('-popular_tags')
 
 
+class PostQuerySet(models.QuerySet):
+    def popular(self):
+        return self.annotate(likes_count=Count('likes')).order_by('-likes_count')
+
+    def fetch_with_comments_count(self):
+        """
+        Оптимизированный способ подсчёта комментариев для набора постов.
+
+        Отличия от annotate:
+        - Делает отдельный запрос, чтобы посчитать комментарии только для определенных ID.
+        - Можно добавить любую Python-логику
+        - Присваивает результат каждому посту вручную.
+        - Можно произвести фильтрацию, перед агрегацией.
+        - Решает проблему ресурсоемкости при использовании больше одного annotate.
+        - Дает полный контроль над запросами.
+
+        Когда использовать:
+        annotate — для простых агрегаций, где вся работа делается на стороне БД.
+        fetch_with_comments_count — для сложной логики, которую нельзя выразить через SQL.
+        """
+        most_popular_posts_ids = [post.id for post in self]
+        posts_with_comments = Post.objects.filter(id__in=most_popular_posts_ids).annotate(comments_count=Count('comments'))
+        ids_and_comments = posts_with_comments.values_list('id', 'comments_count')
+        count_for_id = dict(ids_and_comments)
+
+        for post in self:
+            post.comments_count = count_for_id[post.id]
+        return self
+
+
 class Post(models.Model):
     title = models.CharField('Заголовок', max_length=200)
     text = models.TextField('Текст')
@@ -30,6 +60,7 @@ class Post(models.Model):
         'Tag',
         related_name='posts',
         verbose_name='Теги')
+    objects = PostQuerySet.as_manager()
 
     def __str__(self):
         return self.title
