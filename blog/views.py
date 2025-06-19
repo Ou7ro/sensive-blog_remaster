@@ -6,13 +6,6 @@ from blog.models import Comment, Post, Tag
 def serialize_tag(tag):
     return {
         'title': tag.title,
-        'posts_with_tag': len(Post.objects.filter(tags=tag)),
-    }
-
-
-def serialize_tag_optimazed(tag):
-    return {
-        'title': tag.title,
         'posts_with_tag': tag.posts_count,
     }
 
@@ -55,7 +48,7 @@ def index(request):
             serialize_post(post) for post in most_popular_posts
         ],
         'page_posts': [serialize_post(post) for post in most_fresh_posts],
-        'popular_tags': [serialize_tag_optimazed(tag) for tag in most_popular_tags],
+        'popular_tags': [serialize_tag(tag) for tag in most_popular_tags],
     }
     return render(request, 'index.html', context)
 
@@ -73,7 +66,7 @@ def post_detail(request, slug):
 
     likes = post.likes.all()
 
-    related_tags = post.tags.all()
+    related_tags = Tag.objects.popular()
 
     serialized_post = {
         'title': post.title,
@@ -120,9 +113,13 @@ def tag_filter(request, tag_title):
             )
     )[:5].fetch_with_comments_count()
 
-    related_posts = tag.posts.annotate(
-        comments_count=Count('comments')
-    )[:20]
+    related_posts = Post.objects.popular()[:20].prefetch_related(
+            'author',
+            Prefetch(
+                'tags',
+                queryset=Tag.objects.annotate(posts_count=Count('posts')).all()
+            )
+    )[:5].fetch_with_comments_count()
 
     context = {
         'tag': tag.title,
